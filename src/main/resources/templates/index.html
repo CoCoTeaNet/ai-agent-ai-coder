@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 智能助手</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部导航 -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🤖</span>
+                <span class="logo-text">Agent 智能助手</span>
+            </div>
+            <div class="header-actions">
+                <button id="traceToggle" class="btn btn-secondary" title="点击隐藏执行链路">
+                    <span>🔍</span> 链路
+                </button>
+                <button id="toolsBtn" class="btn btn-secondary" title="查看工具">
+                    <span>🛠️</span> 工具
+                </button>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 聊天区域 -->
+            <div class="chat-container" id="chatContainer">
+                <!-- 欢迎消息 -->
+                <div class="message message-assistant">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="message-text">
+                            你好！我是 Agent 智能助手（高级版）。我可以帮助你：<br>
+                            • 回答问题和进行对话<br>
+                            • 执行计算任务<br>
+                            • 查询日期和时间<br>
+                            • 搜索信息（示例）<br><br>
+                            <strong>高级功能：</strong><br>
+                            • 思维链推理 - 展示思考过程<br>
+                            • ReAct 模式 - 智能工具选择<br>
+                            • 自我反思 - 自动优化回答<br>
+                            • 长对话摘要 - 保持上下文记忆<br><br>
+                            <strong>技能系统：</strong><br>
+                            • 代码分析 - 分析代码质量和复杂度<br>
+                            • 翻译 - 多语言翻译支持<br><br>
+                            试试问我一些问题吧！比如：<br>
+                            • "把'你好'翻译成英语"<br>
+                            • "分析代码"
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="input-container">
+                <!-- 上传的文件预览 -->
+                <div id="filePreviewArea" class="file-preview-area" style="display: none;">
+                    <div id="filePreviewList" class="file-preview-list"></div>
+                </div>
+
+                <div class="input-wrapper">
+                    <!-- 附件上传按钮 -->
+                    <div class="upload-btn-wrapper">
+                        <button id="uploadBtn" class="btn btn-upload" title="上传附件">
+                            <span>📎</span>
+                        </button>
+                        <input type="file" id="fileInput" multiple accept="*/*" style="display: none;">
+                    </div>
+
+                    <textarea
+                        id="messageInput"
+                        class="message-input"
+                        placeholder="输入消息... (Shift+Enter 换行)"
+                        rows="1"
+                    ></textarea>
+                    <button id="sendBtn" class="btn btn-primary" title="发送">
+                        <span>发送</span>
+                    </button>
+                </div>
+                <div class="input-actions">
+                    <span class="session-info" id="sessionInfo">会话 ID: <span id="sessionId">-</span></span>
+                    <span class="tips">提示：按 Enter 发送，Shift+Enter 换行</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 工具面板 -->
+    <div id="toolsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🛠️ 可用工具</h3>
+                <button class="modal-close" id="toolsModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="toolsList" class="tools-list">
+                    <!-- 工具列表将通过 JS 加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Markdown 解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日期查询测试</title>
+</head>
+<body>
+    <h1>日期查询测试</h1>
+
+    <div>
+        <h3>测试1 - 英文查询</h3>
+        <button onclick="testEnglishQuery()">What's the date today?</button>
+        <div id="result1"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h3>测试2 - 中文查询</h3>
+        <button onclick="testChineseQuery()">今天几号？</button>
+        <div id="result2"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h3>测试3 - 当前时间</h3>
+        <button onclick="testTimeQuery()">现在几点了？</button>
+        <div id="result3"></div>
+    </div>
+
+    <script>
+        async function sendMessage(message) {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sessionId: '',
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+
+        async function testEnglishQuery() {
+            const resultDiv = document.getElementById('result1');
+            resultDiv.innerHTML = '正在查询...';
+
+            const data = await sendMessage("What's the date today?");
+
+            if (data.success) {
+                resultDiv.innerHTML = `<p>问题: What's the date today?</p><p>回答: ${data.response}</p>`;
+                if (data.response.includes('2026-04-22')) {
+                    resultDiv.innerHTML += '<p style="color: green; font-weight: bold;">✅ 验证成功！日期正确</p>';
+                } else {
+                    resultDiv.innerHTML += '<p style="color: red;">❌ 验证失败！日期不正确</p>';
+                }
+            } else {
+                resultDiv.innerHTML = '错误: ' + (data.error || '未知错误');
+            }
+        }
+
+        async function testChineseQuery() {
+            const resultDiv = document.getElementById('result2');
+            resultDiv.innerHTML = '正在查询...';
+
+            const data = await sendMessage("今天几号？");
+
+            if (data.success) {
+                resultDiv.innerHTML = `<p>问题: 今天几号？</p><p>回答: ${data.response}</p>`;
+                if (data.response.includes('2026') && data.response.includes('04') && data.response.includes('22')) {
+                    resultDiv.innerHTML += '<p style="color: green; font-weight: bold;">✅ 验证成功！日期正确</p>';
+                } else {
+                    resultDiv.innerHTML += '<p style="color: red;">❌ 验证失败！日期不正确</p>';
+                }
+            } else {
+                resultDiv.innerHTML = '错误: ' + (data.error || '未知错误');
+            }
+        }
+
+        async function testTimeQuery() {
+            const resultDiv = document.getElementById('result3');
+            resultDiv.innerHTML = '正在查询...';
+
+            const data = await sendMessage("现在几点了？");
+
+            if (data.success) {
+                resultDiv.innerHTML = `<p>问题: 现在几点了？</p><p>回答: ${data.response}</p>`;
+            } else {
+                resultDiv.innerHTML = '错误: ' + (data.error || '未知错误');
+            }
+        }
+    </script>
+</body>
+</html>

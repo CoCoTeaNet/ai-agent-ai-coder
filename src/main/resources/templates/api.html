@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 文档 - Agent 智能助手</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .api-container {
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .api-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .api-header h1 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .api-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .api-section-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+        }
+
+        .api-section-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .api-section-content {
+            padding: 1.5rem;
+        }
+
+        .api-endpoint {
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .api-endpoint:last-child {
+            margin-bottom: 0;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .endpoint-method {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .endpoint-method.get { background: #e3f2fd; color: #1976d2; }
+        .endpoint-method.post { background: #e8f5e9; color: #388e3c; }
+        .endpoint-method.delete { background: #ffebee; color: #d32f2f; }
+
+        .endpoint-path {
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #333;
+        }
+
+        .endpoint-content {
+            padding: 1rem;
+        }
+
+        .endpoint-description {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .endpoint-params h4,
+        .endpoint-example h4,
+        .endpoint-response h4 {
+            margin: 0 0 0.5rem 0;
+            color: #667eea;
+            font-size: 0.875rem;
+        }
+
+        .endpoint-params {
+            margin-bottom: 1rem;
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .param-table th,
+        .param-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border: 1px solid #e1e5e9;
+        }
+
+        .param-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            border: 1px solid #e1e5e9;
+            line-height: 1.5;
+        }
+
+        .code-block code {
+            color: #333;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .nav-link {
+            color: #667eea;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部导航 -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🤖</span>
+                <span class="logo-text">Agent API 文档</span>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="api-container">
+            <div class="api-header">
+                <h1>📚 API 文档</h1>
+                <p style="color: #666;">Agent 智能助手 REST API 参考</p>
+            </div>
+
+            <!-- 会话管理 -->
+            <div class="api-section">
+                <div class="api-section-header">
+                    <h2>🗄️ 会话管理</h2>
+                </div>
+                <div class="api-section-content">
+                    <!-- 创建会话 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method post">POST</span>
+                            <span class="endpoint-path">/api/v1/session</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">创建新的 Agent 会话</p>
+                            <div class="endpoint-response">
+                                <h4>响应示例</h4>
+                                <div class="code-block"><code>{
+  "success": true,
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "会话创建成功"
+}</code></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 获取会话状态 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method get">GET</span>
+                            <span class="endpoint-path">/api/v1/session/{sessionId}/status</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">获取指定会话的状态信息</p>
+                            <div class="endpoint-params">
+                                <h4>路径参数</h4>
+                                <table class="param-table">
+                                    <tr>
+                                        <th>参数名</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                    </tr>
+                                    <tr>
+                                        <td>sessionId</td>
+                                        <td>string</td>
+                                        <td>会话 ID</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 重置会话 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method post">POST</span>
+                            <span class="endpoint-path">/api/v1/session/{sessionId}/reset</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">重置指定会话的状态</p>
+                        </div>
+                    </div>
+
+                    <!-- 删除会话 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method delete">DELETE</span>
+                            <span class="endpoint-path">/api/v1/session/{sessionId}</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">删除指定会话</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 聊天接口 -->
+            <div class="api-section">
+                <div class="api-section-header">
+                    <h2>💬 聊天和任务</h2>
+                </div>
+                <div class="api-section-content">
+                    <!-- 发送消息 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method post">POST</span>
+                            <span class="endpoint-path">/api/v1/chat</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">发送消息与 Agent 进行对话</p>
+                            <div class="endpoint-params">
+                                <h4>请求体</h4>
+                                <div class="code-block"><code>{
+  "sessionId": "可选，会话 ID，不提供则创建新会话",
+  "message": "消息内容"
+}</code></div>
+                            </div>
+                            <div class="endpoint-response">
+                                <h4>响应示例</h4>
+                                <div class="code-block"><code>{
+  "success": true,
+  "sessionId": "会话 ID",
+  "response": "Agent 的回复内容"
+}</code></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 执行任务 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method post">POST</span>
+                            <span class="endpoint-path">/api/v1/task</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">让 Agent 执行特定任务</p>
+                            <div class="endpoint-params">
+                                <h4>请求体</h4>
+                                <div class="code-block"><code>{
+  "sessionId": "可选，会话 ID",
+  "task": "任务描述"
+}</code></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工具和统计 -->
+            <div class="api-section">
+                <div class="api-section-header">
+                    <h2>🛠️ 工具和统计</h2>
+                </div>
+                <div class="api-section-content">
+                    <!-- 获取可用工具 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method get">GET</span>
+                            <span class="endpoint-path">/api/v1/tools</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">获取 Agent 可用的工具列表</p>
+                            <div class="endpoint-params">
+                                <h4>查询参数</h4>
+                                <table class="param-table">
+                                    <tr>
+                                        <th>参数名</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                    </tr>
+                                    <tr>
+                                        <td>sessionId</td>
+                                        <td>string (可选)</td>
+                                        <td>会话 ID</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="endpoint-response">
+                                <h4>响应示例</h4>
+                                <div class="code-block"><code>{
+  "success": true,
+  "tools": [
+    "Calculator - 数学计算",
+    "DateTime - 日期时间处理",
+    "Search - 搜索功能"
+  ]
+}</code></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 获取统计信息 -->
+                    <div class="api-endpoint">
+                        <div class="endpoint-header">
+                            <span class="endpoint-method get">GET</span>
+                            <span class="endpoint-path">/api/v1/stats</span>
+                        </div>
+                        <div class="endpoint-content">
+                            <p class="endpoint-description">获取系统统计信息</p>
+                            <div class="endpoint-response">
+                                <h4>响应示例</h4>
+                                <div class="code-block"><code>{
+  "success": true,
+  "activeSessions": 3
+}</code></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 导航链接 -->
+            <div class="nav-links">
+                <a href="/" class="nav-link">← 返回聊天</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
