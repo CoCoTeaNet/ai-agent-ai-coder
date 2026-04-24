@@ -62,11 +62,31 @@ public class AgentConfig {
             return this;
         }
 
-        // 从环境变量获取 API 密钥
+        // 从环境变量或 .env 文件获取 API 密钥
         public Builder apiKeyFromEnv() {
             String apiKey = System.getenv("AI_API_KEY");
+            
+            // 如果系统环境变量中没有，尝试从项目根目录的 .env 文件中读取
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                try {
+                    java.io.File envFile = new java.io.File(".env");
+                    if (envFile.exists()) {
+                        java.util.Properties props = new java.util.Properties();
+                        try (java.io.FileInputStream fis = new java.io.FileInputStream(envFile)) {
+                            props.load(fis);
+                            apiKey = props.getProperty("AI_API_KEY");
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("读取 .env 文件失败: " + e.getMessage());
+                }
+            }
+
             if (apiKey != null && !apiKey.trim().isEmpty()) {
                 config.apiKey = apiKey.trim();
+            } else {
+                System.err.println("警告: 未找到 AI_API_KEY 环境变量或 .env 配置，使用占位符以防止启动报错。");
+                config.apiKey = "dummy-key-to-prevent-startup-error";
             }
             return this;
         }
