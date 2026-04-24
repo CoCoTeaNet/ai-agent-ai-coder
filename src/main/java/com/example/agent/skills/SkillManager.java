@@ -26,6 +26,7 @@ public class SkillManager {
         // 添加内置技能
         addSkill(new CodeAnalysisSkill());
         addSkill(new TranslationSkill());
+        addSkill(new TongJinchengSkill()); // 注册童锦程视角技能
     }
 
     /**
