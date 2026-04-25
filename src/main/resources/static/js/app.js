@@ -181,6 +181,8 @@ class AgentApp {
             this.getPersistentSession();
             // 更新欢迎消息为Markdown
             this.initWelcomeMessage();
+            // 加载模型列表
+            this.loadModels();
         } catch (error) {
             this.showError('服务器连接失败：' + error.message);
         }
@@ -221,6 +223,91 @@ class AgentApp {
             console.warn('无法获取会话，使用临时 ID', error);
             this.sessionId = 'temp-' + Date.now();
             this.sessionInfo.textContent = '本地';
+        }
+    }
+
+    // 加载并渲染模型切换器
+    async loadModels() {
+        const toggleGroup = document.getElementById('modelToggleGroup');
+        if (!toggleGroup) return;
+
+        try {
+            const response = await fetch('/api/v1/models');
+            const data = await response.json();
+
+            if (data.success && data.models) {
+                toggleGroup.innerHTML = '';
+                let firstAvailableModel = null;
+
+                data.models.forEach(model => {
+                    const btn = document.createElement('button');
+                    btn.className = 'model-toggle-btn';
+                    btn.dataset.value = model.id;
+
+                    const dot = document.createElement('span');
+                    dot.className = 'model-status-dot';
+
+                    const text = document.createElement('span');
+                    text.textContent = model.name;
+
+                    btn.appendChild(dot);
+                    btn.appendChild(text);
+
+                    if (!model.available) {
+                        btn.classList.add('disabled');
+                        btn.title = '未配置该模型或不可用';
+                    } else if (!firstAvailableModel) {
+                        firstAvailableModel = model;
+                    }
+
+                    // 点击切换模型
+                    btn.addEventListener('click', async () => {
+                        if (btn.classList.contains('disabled') || btn.classList.contains('active')) return;
+
+                        // 乐观更新UI
+                        const currentActive = toggleGroup.querySelector('.active');
+                        if (currentActive) currentActive.classList.remove('active');
+                        btn.classList.add('active');
+
+                        try {
+                            const switchResponse = await fetch('/api/v1/models/switch', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ modelId: model.id })
+                            });
+
+                            const switchData = await switchResponse.json();
+                            if (!switchData.success) {
+                                this.showToast(switchData.error || '当前模型不可用', 'error');
+                                // 恢复原状
+                                btn.classList.remove('active');
+                                if (currentActive) currentActive.classList.add('active');
+                            } else {
+                                this.currentModelId = model.id;
+                                this.showToast(`已切换至: ${model.name}`, 'success');
+                            }
+                        } catch (error) {
+                            this.showToast('切换模型失败', 'error');
+                            btn.classList.remove('active');
+                            if (currentActive) currentActive.classList.add('active');
+                        }
+                    });
+
+                    toggleGroup.appendChild(btn);
+                });
+
+                // 默认选中第一个可用模型
+                if (firstAvailableModel) {
+                    this.currentModelId = firstAvailableModel.id;
+                    const defaultBtn = toggleGroup.querySelector(`[data-value="${firstAvailableModel.id}"]`);
+                    if (defaultBtn) {
+                        defaultBtn.classList.add('active');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('加载模型列表失败:', error);
+            toggleGroup.innerHTML = '<span style="color: var(--text-muted); font-size: 12px; padding: 0 10px;">加载模型失败</span>';
         }
     }
 
@@ -295,6 +382,10 @@ class AgentApp {
         textDiv.innerHTML = '<span class="streaming-cursor"></span>';
 
         content.appendChild(textDiv);
+
+        const footer = this.createMessageFooter('assistant');
+        content.appendChild(footer);
+
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(content);
         this.chatContainer.appendChild(messageDiv);
@@ -333,7 +424,7 @@ class AgentApp {
                         trace = result.trace;
                         if (this.showTrace) {
                             const traceDiv = this.createTraceDiv(trace);
-                            content.appendChild(traceDiv);
+                            content.insertBefore(traceDiv, footer);
                         }
                     }
                     if (result.sessionId && !this.sessionId) {
@@ -419,7 +510,7 @@ class AgentApp {
                                             trace = eventData.trace;
                                             if (this.showTrace && trace.length > 0) {
                                                 const traceDiv = this.createTraceDiv(trace);
-                                                content.appendChild(traceDiv);
+                                                content.insertBefore(traceDiv, footer);
                                             }
                                         }
                                         if (eventData.sessionId && !this.sessionId) {
@@ -452,43 +543,7 @@ class AgentApp {
         }
     }
 
-    // 添加消息到聊天界面
-    addMessageToChat(text, sender, trace = null) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message message-' + sender;
 
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        avatar.textContent = sender === 'user' ? '👤' : '🤖';
-
-        const content = document.createElement('div');
-        content.className = 'message-content';
-
-        const textDiv = document.createElement('div');
-        textDiv.className = 'message-text';
-
-        // 如果是助手消息，解析Markdown
-        if (sender === 'assistant') {
-            textDiv.innerHTML = this.parseMarkdown(text);
-        } else {
-            // 用户消息保持原样
-            textDiv.textContent = text;
-        }
-
-        content.appendChild(textDiv);
-
-        // 如果是助手消息且有执行链路，添加执行链路显示
-        if (sender === 'assistant' && trace && trace.length > 0 && this.showTrace) {
-            const traceDiv = this.createTraceDiv(trace);
-            content.appendChild(traceDiv);
-        }
-
-        messageDiv.appendChild(avatar);
-        messageDiv.appendChild(content);
-
-        this.chatContainer.appendChild(messageDiv);
-        this.scrollToBottom();
-    }
 
     // 创建执行链路显示
     createTraceDiv(trace) {
@@ -822,9 +877,20 @@ class AgentApp {
         previewItem.className = 'file-preview-item';
         previewItem.dataset.id = fileObj.id;
 
-        const fileIcon = document.createElement('span');
-        fileIcon.className = 'file-icon';
-        fileIcon.textContent = this.getFileIcon(fileObj.name);
+        if (fileObj.type && fileObj.type.startsWith('image/')) {
+            const imgPreview = document.createElement('img');
+            imgPreview.src = URL.createObjectURL(fileObj.file);
+            imgPreview.style.width = '40px';
+            imgPreview.style.height = '40px';
+            imgPreview.style.objectFit = 'cover';
+            imgPreview.style.borderRadius = '4px';
+            previewItem.appendChild(imgPreview);
+        } else {
+            const fileIcon = document.createElement('span');
+            fileIcon.className = 'file-icon';
+            fileIcon.textContent = this.getFileIcon(fileObj.name);
+            previewItem.appendChild(fileIcon);
+        }
 
         const fileName = document.createElement('span');
         fileName.className = 'file-name';
@@ -843,7 +909,6 @@ class AgentApp {
             this.removeFile(fileObj.id);
         });
 
-        previewItem.appendChild(fileIcon);
         previewItem.appendChild(fileName);
         previewItem.appendChild(fileSize);
         previewItem.appendChild(removeBtn);
@@ -941,6 +1006,65 @@ class AgentApp {
         }
     }
 
+    // 创建消息底部操作区
+    createMessageFooter(sender) {
+        const footer = document.createElement('div');
+        footer.className = 'message-footer';
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        const now = new Date();
+        timeSpan.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        footer.appendChild(timeSpan);
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'action-btn';
+        copyBtn.title = '复制内容';
+        copyBtn.innerHTML = '📋';
+        copyBtn.onclick = () => {
+            const wrapper = footer.closest('.message-content');
+            if (wrapper) {
+                const textDiv = wrapper.querySelector('.message-text');
+                if (textDiv) {
+                    navigator.clipboard.writeText(textDiv.innerText).then(() => {
+                        const originalHtml = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '✅';
+                        setTimeout(() => { copyBtn.innerHTML = originalHtml; }, 2000);
+                    });
+                }
+            }
+        };
+        actionsDiv.appendChild(copyBtn);
+        
+        if (sender === 'assistant') {
+            const likeBtn = document.createElement('button');
+            likeBtn.className = 'action-btn';
+            likeBtn.title = '点赞';
+            likeBtn.innerHTML = '👍';
+            likeBtn.onclick = () => {
+                likeBtn.style.color = 'var(--accent-cyan)';
+            };
+            actionsDiv.appendChild(likeBtn);
+            
+            const regenBtn = document.createElement('button');
+            regenBtn.className = 'action-btn';
+            regenBtn.title = '重新生成';
+            regenBtn.innerHTML = '🔄';
+            regenBtn.onclick = () => {
+                // 仅作为演示，实际需调用重试接口
+                regenBtn.style.transform = 'rotate(180deg)';
+                setTimeout(() => { regenBtn.style.transform = ''; }, 500);
+            };
+            actionsDiv.appendChild(regenBtn);
+        }
+        
+        footer.appendChild(actionsDiv);
+        return footer;
+    }
+
     // 覆盖addMessageToChat方法，添加附件显示支持
     addMessageToChat(text, sender, trace = null, attachments = null) {
         const messageDiv = document.createElement('div');
@@ -979,39 +1103,78 @@ class AgentApp {
                 attachmentDiv.style.gap = '0.5rem';
                 attachmentDiv.style.padding = '0.5rem';
                 attachmentDiv.style.marginTop = '0.5rem';
-                attachmentDiv.style.backgroundColor = '#f8f9fa';
-                attachmentDiv.style.borderRadius = '6px';
-                attachmentDiv.style.border = '1px solid #e9ecef';
+                attachmentDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                attachmentDiv.style.border = '1px solid var(--border-color)';
+                attachmentDiv.style.borderRadius = '8px';
 
-                const iconSpan = document.createElement('span');
-                iconSpan.textContent = this.getFileIcon(attachment.name);
+                if (attachment.type && attachment.type.startsWith('image/')) {
+                    // 图片展示
+                    attachmentDiv.style.flexDirection = 'column';
+                    attachmentDiv.style.alignItems = 'flex-start';
+                    attachmentDiv.style.cursor = 'pointer';
+                    
+                    const img = document.createElement('img');
+                    img.src = attachment.url;
+                    img.alt = attachment.name;
+                    img.style.maxWidth = '200px';
+                    img.style.maxHeight = '200px';
+                    img.style.borderRadius = '4px';
+                    img.style.objectFit = 'contain';
+                    
+                    // 点击放大图片
+                    img.onclick = (e) => {
+                        e.stopPropagation();
+                        this.showImageModal(attachment.url);
+                    };
 
-                const nameSpan = document.createElement('span');
-                nameSpan.style.fontSize = '0.875rem';
-                nameSpan.style.color = '#495057';
-                nameSpan.textContent = attachment.name;
-                if (attachment.url) {
-                    const link = document.createElement('a');
-                    link.href = attachment.url;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.style.color = '#667eea';
-                    link.style.textDecoration = 'none';
-                    link.textContent = attachment.name;
-                    link.style.hover = { textDecoration: 'underline' };
-                    nameSpan.innerHTML = '';
-                    nameSpan.appendChild(link);
+                    const infoDiv = document.createElement('div');
+                    infoDiv.style.display = 'flex';
+                    infoDiv.style.width = '100%';
+                    infoDiv.style.justifyContent = 'space-between';
+                    infoDiv.style.fontSize = '0.8rem';
+                    infoDiv.style.color = 'var(--text-muted)';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = attachment.name;
+                    nameSpan.style.overflow = 'hidden';
+                    nameSpan.style.textOverflow = 'ellipsis';
+                    nameSpan.style.whiteSpace = 'nowrap';
+                    nameSpan.style.maxWidth = '150px';
+                    
+                    const sizeSpan = document.createElement('span');
+                    sizeSpan.textContent = this.formatFileSize(attachment.size);
+                    
+                    infoDiv.appendChild(nameSpan);
+                    infoDiv.appendChild(sizeSpan);
+                    
+                    attachmentDiv.appendChild(img);
+                    attachmentDiv.appendChild(infoDiv);
+                } else {
+                    // 普通文件展示
+                    const iconSpan = document.createElement('span');
+                    iconSpan.className = 'file-icon';
+                    iconSpan.textContent = '📄';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'file-name';
+                    nameSpan.style.flex = '1';
+                    nameSpan.style.overflow = 'hidden';
+                    nameSpan.style.textOverflow = 'ellipsis';
+                    nameSpan.style.whiteSpace = 'nowrap';
+                    nameSpan.textContent = attachment.name;
+
+                    const sizeSpan = document.createElement('span');
+                    sizeSpan.className = 'file-size';
+                    sizeSpan.style.color = 'var(--text-muted)';
+                    sizeSpan.style.fontSize = '0.8rem';
+                    sizeSpan.style.marginLeft = 'auto';
+                    sizeSpan.textContent = this.formatFileSize(attachment.size);
+
+                    attachmentDiv.appendChild(iconSpan);
+                    attachmentDiv.appendChild(nameSpan);
+                    attachmentDiv.appendChild(sizeSpan);
                 }
-
-                const sizeSpan = document.createElement('span');
-                sizeSpan.style.fontSize = '0.75rem';
-                sizeSpan.style.color = '#6c757d';
-                sizeSpan.style.marginLeft = 'auto';
-                sizeSpan.textContent = this.formatFileSize(attachment.size);
-
-                attachmentDiv.appendChild(iconSpan);
-                attachmentDiv.appendChild(nameSpan);
-                attachmentDiv.appendChild(sizeSpan);
+                
                 attachmentsDiv.appendChild(attachmentDiv);
             });
 
@@ -1024,11 +1187,86 @@ class AgentApp {
             content.appendChild(traceDiv);
         }
 
+        // 添加底部操作区
+        const footer = this.createMessageFooter(sender);
+        content.appendChild(footer);
+
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(content);
 
         this.chatContainer.appendChild(messageDiv);
         this.scrollToBottom();
+    }
+
+    // 显示图片模态框
+    showImageModal(imgUrl) {
+        // 创建模态框
+        let modal = document.getElementById('imageModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'imageModal';
+            modal.className = 'modal';
+            modal.style.display = 'none'; // 初始隐藏
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.zIndex = '2000';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.3s ease';
+            
+            const img = document.createElement('img');
+            img.id = 'imageModalImg';
+            img.style.maxWidth = '90%';
+            img.style.maxHeight = '90%';
+            img.style.objectFit = 'contain';
+            img.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
+            img.style.transform = 'scale(0.9)';
+            img.style.transition = 'transform 0.3s ease';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '1rem';
+            closeBtn.style.right = '2rem';
+            closeBtn.style.background = 'none';
+            closeBtn.style.border = 'none';
+            closeBtn.style.color = 'white';
+            closeBtn.style.fontSize = '3rem';
+            closeBtn.style.cursor = 'pointer';
+            
+            modal.appendChild(img);
+            modal.appendChild(closeBtn);
+            
+            // 点击关闭
+            const closeModal = () => {
+                modal.style.opacity = '0';
+                img.style.transform = 'scale(0.9)';
+                setTimeout(() => modal.style.display = 'none', 300);
+            };
+            closeBtn.onclick = closeModal;
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            };
+            
+            document.body.appendChild(modal);
+        }
+        
+        const modalImg = document.getElementById('imageModalImg');
+        modalImg.src = imgUrl;
+        
+        modal.style.display = 'flex';
+        // 稍微延迟以触发动画
+        setTimeout(() => {
+            modal.style.opacity = '1';
+            modalImg.style.transform = 'scale(1)';
+        }, 10);
     }
 }
 

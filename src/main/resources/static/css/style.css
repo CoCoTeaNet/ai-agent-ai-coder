@@ -98,6 +98,75 @@ body {
     filter: drop-shadow(0 0 8px var(--accent-cyan));
 }
 
+.header-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+}
+
+/* 模型切换分段控制器 */
+.model-toggle-wrapper {
+    display: inline-flex;
+    background: rgba(11, 15, 25, 0.8);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 24px;
+    padding: 4px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    gap: 2px;
+}
+
+.model-toggle-btn {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+}
+
+.model-toggle-btn:hover:not(.disabled):not(.active) {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.model-toggle-btn.active {
+    color: #000;
+    background: var(--accent-cyan);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    font-weight: 600;
+}
+
+.model-toggle-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 图标或状态点 */
+.model-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+.model-toggle-btn.active .model-status-dot {
+    background: #000;
+}
+.model-toggle-btn:not(.disabled):not(.active) .model-status-dot {
+    background: #10b981; /* 绿色表示可用但未选中 */
+}
+.model-toggle-btn.disabled .model-status-dot {
+    background: #ef4444; /* 红色表示不可用 */
+}
+
 .header-actions {
     display: flex;
     gap: 1rem;
@@ -271,6 +340,55 @@ body {
 .message-text {
     word-wrap: break-word;
     white-space: pre-line;
+}
+
+/* 消息底部操作区 */
+.message-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.message:hover .message-footer {
+    opacity: 1;
+}
+
+.message-time {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.message-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    color: var(--accent-cyan);
+    background: rgba(0, 240, 255, 0.1);
+    transform: scale(1.1);
 }
 
 /* 输入区域 */
