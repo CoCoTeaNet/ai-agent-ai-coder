@@ -10,6 +10,8 @@ import com.example.agent.tools.SearchTool;
 import com.example.agent.tools.FileTool;
 import com.example.agent.tools.NetworkTool;
 import com.example.agent.tools.RealSearchTool;
+import com.example.agent.tools.ExcelTool;
+import com.example.agent.tools.DataSpiderTool;
 import com.example.agent.skills.SkillManager;
 import com.example.agent.skills.Skill;
 import dev.langchain4j.data.message.*;
@@ -45,6 +47,8 @@ public class BaseAgent implements Agent {
     private final RealSearchTool realSearchTool;
     private final FileTool fileTool;
     private final NetworkTool networkTool;
+    private final ExcelTool excelTool;
+    private final DataSpiderTool dataSpiderTool;
     private final SkillManager skillManager;
     private boolean initialized;
     private String conversationSummary;
@@ -70,6 +74,8 @@ public class BaseAgent implements Agent {
         this.realSearchTool = new RealSearchTool();
         this.fileTool = new FileTool();
         this.networkTool = new NetworkTool();
+        this.excelTool = new ExcelTool();
+        this.dataSpiderTool = new DataSpiderTool();
         this.skillManager = new SkillManager();
         this.conversationSummary = "";
         this.totalMessagesProcessed = 0;
@@ -80,7 +86,7 @@ public class BaseAgent implements Agent {
             this.agentWithTools = AiServices.builder(AgentWithTools.class)
                     .chatLanguageModel(chatModel)
                     .chatMemory(chatMemory)
-                    .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool)
+                    .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool)
                     .build();
         } else {
             this.agentWithTools = null;
