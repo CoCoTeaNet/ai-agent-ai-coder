@@ -37,6 +37,14 @@ public class MemoryService {
     }
 
     /**
+     * 添加完整的用户消息（支持多模态）
+     */
+    public void addUserMessage(UserMessage message) {
+        messages.add(message);
+        trimHistory();
+    }
+
+    /**
      * 添加 AI 消息
      */
     public void addAiMessage(String content) {

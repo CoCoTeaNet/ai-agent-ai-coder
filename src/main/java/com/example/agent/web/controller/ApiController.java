@@ -81,30 +81,6 @@ public class ApiController {
                 String sessionId = request.getSessionId();
                 String message = request.getMessage();
 
-                // 处理附件内容 - 将附件内容追加到消息中
-                if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
-                    StringBuilder messageBuilder = new StringBuilder(message != null ? message : "");
-
-                    for (Map<String, Object> attachment : request.getAttachments()) {
-                        String filePath = (String) attachment.get("path");
-                        if (filePath != null) {
-                            File file = new File(filePath);
-                            if (file.exists() && file.isFile()) {
-                                try {
-                                    String fileContent = readFileContent(file);
-                                    String fileName = (String) attachment.get("name");
-                                    messageBuilder.append("\n\n=== 附件内容: ").append(fileName).append(" ===\n");
-                                    messageBuilder.append(fileContent);
-                                } catch (IOException e) {
-                                    log.error("读取文件内容失败: " + filePath, e);
-                                }
-                            }
-                        }
-                    }
-
-                    message = messageBuilder.toString();
-                }
-
                 if (message == null || message.trim().isEmpty()) {
                     Map<String, Object> error = new HashMap<>();
                     error.put("success", false);
@@ -123,7 +99,8 @@ public class ApiController {
 
                 // 分块发送消息
                 StringBuilder fullResponse = new StringBuilder();
-                String responseMessage = agentService.sendMessage(sessionId, message);
+                // 注意：文件读取逻辑已移动到 BaseAgent 中，此处直接将附件信息传递给 AgentService
+                String responseMessage = agentService.sendMessage(sessionId, message, request.getAttachments());
 
                 // 更稳定的流式发送：每 100 个字符发送一次，或者在完整的句子/段落时发送
                 int chunkSize = 100; // 每 100 个字符发送一次
@@ -168,6 +145,33 @@ public class ApiController {
         return emitter;
     }
 
+    @GetMapping("/models")
+    public ResponseEntity<Map<String, Object>> getModels() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("models", agentService.getAvailableModels());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 切换模型
+     */
+    @PostMapping("/models/switch")
+    public ResponseEntity<Map<String, Object>> switchModel(@RequestBody Map<String, String> request) {
+        String modelId = request.get("modelId");
+        boolean success = agentService.switchModel(modelId);
+        
+        Map<String, Object> response = new HashMap<>();
+        if (success) {
+            response.put("success", true);
+            response.put("message", "模型切换成功");
+        } else {
+            response.put("success", false);
+            response.put("error", "当前模型不可用或不存在");
+        }
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * 发送消息（非流式）
      */
@@ -176,30 +180,6 @@ public class ApiController {
         try {
             String sessionId = request.getSessionId();
             String message = request.getMessage();
-
-            // 处理附件内容 - 将附件内容追加到消息中
-            if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
-                StringBuilder messageBuilder = new StringBuilder(message != null ? message : "");
-
-                for (Map<String, Object> attachment : request.getAttachments()) {
-                    String filePath = (String) attachment.get("path");
-                    if (filePath != null) {
-                        File file = new File(filePath);
-                        if (file.exists() && file.isFile()) {
-                            try {
-                                String fileContent = readFileContent(file);
-                                String fileName = (String) attachment.get("name");
-                                messageBuilder.append("\n\n=== 附件内容: ").append(fileName).append(" ===\n");
-                                messageBuilder.append(fileContent);
-                            } catch (IOException e) {
-                                log.error("读取文件内容失败: " + filePath, e);
-                            }
-                        }
-                    }
-                }
-
-                message = messageBuilder.toString();
-            }
 
             if (message == null || message.trim().isEmpty()) {
                 Map<String, Object> response = new HashMap<>();
@@ -212,7 +192,8 @@ public class ApiController {
                 sessionId = agentService.createSession();
             }
 
-            String responseMessage = agentService.sendMessage(sessionId, message);
+            // 注意：文件读取逻辑已移动到 BaseAgent 中，此处直接将附件信息传递给 AgentService
+            String responseMessage = agentService.sendMessage(sessionId, message, request.getAttachments());
 
             // 获取执行链路
             java.util.List<ExecutionTrace.TraceStepDTO> trace = agentService.getSessionTrace(sessionId);
@@ -490,8 +471,18 @@ public class ApiController {
             Resource resource = new UrlResource(path.toUri());
 
             if (resource.exists() || resource.isReadable()) {
+                String contentType = "application/octet-stream";
+                try {
+                    contentType = java.nio.file.Files.probeContentType(path);
+                } catch (IOException e) {
+                    log.warn("无法探测文件类型: {}", path, e);
+                }
+                
+                String disposition = (contentType != null && contentType.startsWith("image/")) ? "inline" : "attachment";
+                
                 return ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                        .header(HttpHeaders.CONTENT_TYPE, contentType)
+                        .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename=\"" + fileName + "\"")
                         .body(resource);
             } else {
                 return ResponseEntity.notFound().build();

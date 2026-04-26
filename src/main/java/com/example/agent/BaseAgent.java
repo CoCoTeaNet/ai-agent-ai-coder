@@ -10,9 +10,12 @@ import com.example.agent.tools.SearchTool;
 import com.example.agent.tools.FileTool;
 import com.example.agent.tools.NetworkTool;
 import com.example.agent.tools.RealSearchTool;
+import com.example.agent.tools.ExcelTool;
+import com.example.agent.tools.DataSpiderTool;
 import com.example.agent.skills.SkillManager;
 import com.example.agent.skills.Skill;
 import dev.langchain4j.data.message.*;
+import java.util.Map;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
@@ -44,6 +47,8 @@ public class BaseAgent implements Agent {
     private final RealSearchTool realSearchTool;
     private final FileTool fileTool;
     private final NetworkTool networkTool;
+    private final ExcelTool excelTool;
+    private final DataSpiderTool dataSpiderTool;
     private final SkillManager skillManager;
     private boolean initialized;
     private String conversationSummary;
@@ -69,6 +74,8 @@ public class BaseAgent implements Agent {
         this.realSearchTool = new RealSearchTool();
         this.fileTool = new FileTool();
         this.networkTool = new NetworkTool();
+        this.excelTool = new ExcelTool();
+        this.dataSpiderTool = new DataSpiderTool();
         this.skillManager = new SkillManager();
         this.conversationSummary = "";
         this.totalMessagesProcessed = 0;
@@ -79,7 +86,7 @@ public class BaseAgent implements Agent {
             this.agentWithTools = AiServices.builder(AgentWithTools.class)
                     .chatLanguageModel(chatModel)
                     .chatMemory(chatMemory)
-                    .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool)
+                    .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool)
                     .build();
         } else {
             this.agentWithTools = null;
@@ -147,17 +154,82 @@ public class BaseAgent implements Agent {
         }
     }
 
-    @Override
-    public String interact(String message) {
+    /**
+     * 与 Agent 交互（支持附件）
+     * @param message 用户消息
+     * @param attachments 附件列表
+     * @return Agent 响应
+     */
+    public String interact(String message, List<Map<String, Object>> attachments) {
         checkInitialized();
         try {
             // 创建新的执行链路
             if (traceEnabled) {
                 currentTrace = new ExecutionTrace();
                 currentTrace.addThought("收到用户消息: " + message);
+                if (attachments != null && !attachments.isEmpty()) {
+                    currentTrace.addThought("包含附件数量: " + attachments.size());
+                }
             }
 
-            memoryService.addUserMessage(message);
+            // 处理附件构建 UserMessage
+            UserMessage userMessage;
+            if (attachments != null && !attachments.isEmpty()) {
+                List<Content> contents = new ArrayList<>();
+                
+                // 将附件文本内容直接追加到消息中
+                StringBuilder textBuilder = new StringBuilder(message != null ? message : "");
+                for (Map<String, Object> attachment : attachments) {
+                    String filePath = (String) attachment.get("path");
+                    String type = (String) attachment.get("type");
+                    String name = (String) attachment.get("name");
+                    
+                    if (filePath != null) {
+                        java.io.File file = new java.io.File(filePath);
+                        if (file.exists() && file.isFile()) {
+                            if (type != null && type.startsWith("image/")) {
+                                // 图片类型，添加 ImageContent
+                                try {
+                                    byte[] fileBytes = java.nio.file.Files.readAllBytes(file.toPath());
+                                    String base64Image = java.util.Base64.getEncoder().encodeToString(fileBytes);
+                                    contents.add(ImageContent.from(base64Image, type));
+                                    if (traceEnabled) {
+                                        currentTrace.addObservation("处理图片: " + name);
+                                    }
+                                } catch (Exception e) {
+                                    log.error("读取图片失败: {}", filePath, e);
+                                    textBuilder.append("\n[图片读取失败: ").append(name).append("]");
+                                }
+                            } else {
+                                // 文本类型，读取内容并追加
+                                try {
+                                    String fileContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                                    textBuilder.append("\n\n=== 附件内容: ").append(name).append(" ===\n");
+                                    // 截断过长的文本
+                                    if (fileContent.length() > 50000) {
+                                        textBuilder.append(fileContent, 0, 50000).append("\n... (内容已截断)");
+                                    } else {
+                                        textBuilder.append(fileContent);
+                                    }
+                                } catch (Exception e) {
+                                    log.error("读取文件内容失败: {}", filePath, e);
+                                    textBuilder.append("\n[文件读取失败: ").append(name).append("]");
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                contents.add(TextContent.from(textBuilder.toString()));
+                userMessage = UserMessage.from(contents);
+                
+                // 更新 message 以用于后续匹配
+                message = textBuilder.toString();
+            } else {
+                userMessage = UserMessage.from(message);
+            }
+
+            memoryService.addUserMessage(userMessage);
             totalMessagesProcessed++;
             log.info("发送消息到 LLM: {}", message);
 
@@ -187,14 +259,27 @@ public class BaseAgent implements Agent {
                         currentTrace.addThought("使用带工具的 Agent 模式");
                         currentTrace.addObservation("已启用工具: Calculator, DateTime, RealSearchTool, FileTool, NetworkTool");
                     }
-                    // 使用带工具的 Agent
-                    response = agentWithTools.chat(message);
+                    // 使用带工具的 Agent（由于 agentWithTools 不支持多模态直接传入，我们先简单降级或自己处理，
+                    // 这里为了简单，我们如果是多模态，手动走 chatModel.generate(messages) 并带工具支持，但Langchain4j支持UserMessage直接传）
+                    if (attachments != null && !attachments.isEmpty() && attachments.stream().anyMatch(a -> a.get("type") != null && ((String)a.get("type")).startsWith("image/"))) {
+                        // 有图片时，手动发消息获取响应（因为 agentWithTools.chat(String) 只能传 String）
+                        dev.langchain4j.model.output.Response<AiMessage> llmResponse = chatModel.generate(memoryService.getMessages());
+                        response = llmResponse.content().text();
+                    } else {
+                        response = agentWithTools.chat(message);
+                    }
                 } else {
                     if (traceEnabled) {
                         currentTrace.addThought("使用简单模式（工具可能被禁用）");
                     }
                     // 简单模式：先检测是否需要调用工具
-                    response = handleWithAdvancedTools(message);
+                    if (attachments != null && !attachments.isEmpty() && attachments.stream().anyMatch(a -> a.get("type") != null && ((String)a.get("type")).startsWith("image/"))) {
+                        // 有图片时直接调chatModel
+                        dev.langchain4j.model.output.Response<AiMessage> llmResponse = chatModel.generate(memoryService.getMessages());
+                        response = llmResponse.content().text();
+                    } else {
+                        response = handleWithAdvancedTools(message);
+                    }
                 }
             }
 
@@ -218,6 +303,16 @@ public class BaseAgent implements Agent {
             }
             return errorMsg;
         }
+    }
+
+    /**
+     * 与 Agent 交互（向后兼容）
+     * @param message 用户消息
+     * @return Agent 响应
+     */
+    @Override
+    public String interact(String message) {
+        return interact(message, null);
     }
 
     /**
