@@ -160,7 +160,7 @@ public class ApiController {
     public ResponseEntity<Map<String, Object>> switchModel(@RequestBody Map<String, String> request) {
         String modelId = request.get("modelId");
         boolean success = agentService.switchModel(modelId);
-        
+
         Map<String, Object> response = new HashMap<>();
         if (success) {
             response.put("success", true);
@@ -170,6 +170,54 @@ public class ApiController {
             response.put("error", "当前模型不可用或不存在");
         }
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 切换会话使用的提供商
+     */
+    @PostMapping("/session/{sessionId}/provider")
+    public ResponseEntity<Map<String, Object>> switchSessionProvider(
+            @PathVariable String sessionId,
+            @RequestBody Map<String, String> request) {
+        try {
+            String providerConfigId = request.get("providerConfigId");
+            boolean success = agentService.switchSessionProvider(sessionId, providerConfigId);
+
+            Map<String, Object> response = new HashMap<>();
+            if (success) {
+                response.put("success", true);
+                response.put("message", "提供商切换成功");
+                response.put("providerConfigId", providerConfigId);
+            } else {
+                response.put("success", false);
+                response.put("error", "提供商配置不存在或不可用");
+            }
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    /**
+     * 获取会话当前使用的提供商
+     */
+    @GetMapping("/session/{sessionId}/provider")
+    public ResponseEntity<Map<String, Object>> getSessionProvider(@PathVariable String sessionId) {
+        try {
+            String providerConfigId = agentService.getSessionProviderId(sessionId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("providerConfigId", providerConfigId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
     /**

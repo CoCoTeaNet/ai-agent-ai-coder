@@ -21,70 +21,44 @@ public class AgentService {
 
     private final Map<String, BaseAgent> agentSessions;
     private final Map<String, java.util.List<Map<String, Object>>> sessionAttachments;
+    private final Map<String, String> sessionProviderMap; // 会话与提供商配置ID的关联
     private AgentConfig defaultConfig;
     private String persistentSessionId;
-    
+
     // 支持的模型列表
     private final List<Map<String, Object>> availableModels;
 
     public AgentService() {
         this.agentSessions = new ConcurrentHashMap<>();
         this.sessionAttachments = new ConcurrentHashMap<>();
-        
+        this.sessionProviderMap = new ConcurrentHashMap<>();
+
         // 初始化模型列表
         this.availableModels = new ArrayList<>();
-        
-        // 豆包模型配置
-        AgentConfig doubaoConfig = AgentConfig.builder()
-                .provider(AgentConfig.LlmProvider.OPENAI_COMPATIBLE)
-                .modelName("doubao-seed-code-preview-251028")
-                .baseUrl("https://ark.cn-beijing.volces.com/api/coding/v1")
-                .apiKeyFromEnv("AI_API_KEY")
-                .temperature(0.7)
-                .maxTokens(2048)
-                .topP(0.9)
-                .systemPrompt("你是一个聪明的助手，使用可用的工具来回答问题和执行任务。")
-                .enableTools(true)
-                .maxIterations(5)
-                .enableChainOfThought(true)
-                .enableReactMode(true)
-                .enableSelfReflection(true)
-                .maxConversationSummaryLength(1000)
-                .build();
-                
-        Map<String, Object> doubao = new HashMap<>();
-        doubao.put("id", "doubao");
-        doubao.put("name", "豆包 (Doubao)");
-        boolean doubaoAvailable = doubaoConfig.getApiKey() != null 
-            && !doubaoConfig.getApiKey().isEmpty() 
-            && !doubaoConfig.getApiKey().equals("dummy-key-to-prevent-startup-error");
-        doubao.put("available", doubaoAvailable);
-        doubao.put("config", doubaoConfig);
-        availableModels.add(doubao);
-        
-        // DeepSeek 模型配置 (deepseek-chat 对应最新 V3 模型)
-        AgentConfig deepseekConfig = AgentConfig.builder()
-                .provider(AgentConfig.LlmProvider.OPENAI_COMPATIBLE)
-                .modelName("deepseek-chat")
-                .baseUrl("https://api.deepseek.com/v1")
-                .apiKeyFromEnv("DEEPSEEK_API_KEY")
-                .temperature(0.7)
-                .maxTokens(2048)
-                .systemPrompt("你是一个聪明的助手，使用可用的工具来回答问题和执行任务。")
-                .enableTools(true)
-                .build();
-                
-        Map<String, Object> deepseek = new HashMap<>();
-        deepseek.put("id", "deepseek-chat");
-        deepseek.put("name", "DeepSeek (V3)");
-        boolean deepseekAvailable = deepseekConfig.getApiKey() != null 
-            && !deepseekConfig.getApiKey().isEmpty() 
-            && !deepseekConfig.getApiKey().equals("dummy-key-to-prevent-startup-error");
-        deepseek.put("available", deepseekAvailable); 
-        deepseek.put("config", deepseekConfig);
-        availableModels.add(deepseek);
 
-        this.defaultConfig = doubaoAvailable ? doubaoConfig : deepseekConfig;
+        // 初始化默认配置（从提供商配置管理器加载）
+        try {
+            this.defaultConfig = AgentConfig.builder()
+                    .fromDefaultProviderConfig()
+                    .build();
+        } catch (Exception e) {
+            // 如果加载失败，使用默认配置
+            this.defaultConfig = AgentConfig.builder()
+                    .provider(AgentConfig.LlmProvider.OLLAMA)
+                    .modelName("llama2")
+                    .baseUrl("http://localhost:11434")
+                    .temperature(0.7)
+                    .maxTokens(2048)
+                    .topP(0.9)
+                    .systemPrompt("你是一个聪明的助手，使用可用的工具来回答问题和执行任务。")
+                    .enableTools(true)
+                    .maxIterations(5)
+                    .enableChainOfThought(true)
+                    .enableReactMode(true)
+                    .enableSelfReflection(true)
+                    .maxConversationSummaryLength(1000)
+                    .build();
+        }
 
         // 创建持久化会话
         this.persistentSessionId = UUID.randomUUID().toString();
@@ -281,5 +255,51 @@ public class AgentService {
         if (agent != null) {
             agent.setTraceEnabled(enabled);
         }
+    }
+
+    /**
+     * 切换会话使用的提供商
+     */
+    public boolean switchSessionProvider(String sessionId, String providerConfigId) {
+        try {
+            com.example.agent.config.ProviderConfigManager configManager =
+                    com.example.agent.config.ProviderConfigManager.getInstance();
+            com.example.agent.config.ProviderConfig providerConfig = configManager.getConfig(providerConfigId);
+
+            if (providerConfig == null || !providerConfig.isEnabled()) {
+                return false;
+            }
+
+            // 创建新的配置
+            AgentConfig newConfig = AgentConfig.builder()
+                    .fromProviderConfig(providerConfigId)
+                    .systemPrompt("你是一个聪明的助手，使用可用的工具来回答问题和执行任务。")
+                    .enableTools(true)
+                    .maxIterations(5)
+                    .enableChainOfThought(true)
+                    .enableReactMode(true)
+                    .enableSelfReflection(true)
+                    .maxConversationSummaryLength(1000)
+                    .build();
+
+            // 更新会话
+            String targetSessionId = (sessionId == null || sessionId.trim().isEmpty()) ? persistentSessionId : sessionId;
+            sessionProviderMap.put(targetSessionId, providerConfigId);
+            agentSessions.put(targetSessionId, new BaseAgent(newConfig));
+
+            return true;
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AgentService.class)
+                    .error("切换提供商失败: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 获取会话当前使用的提供商配置ID
+     */
+    public String getSessionProviderId(String sessionId) {
+        String targetSessionId = (sessionId == null || sessionId.trim().isEmpty()) ? persistentSessionId : sessionId;
+        return sessionProviderMap.get(targetSessionId);
     }
 }

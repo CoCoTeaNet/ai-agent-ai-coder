@@ -2,6 +2,7 @@ package com.example.agent;
 
 import com.example.agent.config.AgentConfig;
 import com.example.agent.config.LlmClientFactory;
+import com.example.agent.config.DynamicLlmClientFactory;
 import com.example.agent.services.MemoryService;
 import com.example.agent.services.ExecutionTrace;
 import com.example.agent.tools.CalculatorTool;
@@ -37,10 +38,10 @@ public class BaseAgent implements Agent {
 
     private static final Logger log = LoggerFactory.getLogger(BaseAgent.class);
     private final AgentConfig config;
-    private final ChatLanguageModel chatModel;
+    private ChatLanguageModel chatModel;
     private final MemoryService memoryService;
     private final MessageWindowChatMemory chatMemory;
-    private final AgentWithTools agentWithTools;
+    private AgentWithTools agentWithTools;
     private final DateTimeTool dateTimeTool;
     private final CalculatorTool calculatorTool;
     private final SearchTool searchTool;
@@ -55,6 +56,7 @@ public class BaseAgent implements Agent {
     private int totalMessagesProcessed;
     private ExecutionTrace currentTrace;
     private boolean traceEnabled;
+    private volatile boolean usingFallbackModel = false;
 
     /**
      * Agent 工具接口
@@ -65,7 +67,6 @@ public class BaseAgent implements Agent {
 
     public BaseAgent(AgentConfig config) {
         this.config = config;
-        this.chatModel = new LlmClientFactory(config).createChatModel();
         this.memoryService = new MemoryService();
         this.chatMemory = MessageWindowChatMemory.withMaxMessages(40); // 增加到40条消息
         this.dateTimeTool = new DateTimeTool();
@@ -81,20 +82,51 @@ public class BaseAgent implements Agent {
         this.totalMessagesProcessed = 0;
         this.traceEnabled = true;
 
+        // 初始化 ChatLanguageModel，添加错误处理
+        initializeChatModel();
+
         // 初始化带工具的 Agent
-        if (config.isEnableTools()) {
-            this.agentWithTools = AiServices.builder(AgentWithTools.class)
-                    .chatLanguageModel(chatModel)
-                    .chatMemory(chatMemory)
-                    .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool)
-                    .build();
-        } else {
-            this.agentWithTools = null;
-        }
+        initializeAgentWithTools();
 
         // 添加系统提示
         updateSystemPrompt();
         this.initialized = true;
+    }
+
+    private void initializeChatModel() {
+        try {
+            this.chatModel = new LlmClientFactory(config).createChatModel();
+            log.info("成功初始化 ChatLanguageModel: {} ({})", config.getModelName(), config.getProvider());
+            this.usingFallbackModel = false;
+        } catch (Exception e) {
+            log.warn("初始化配置的模型失败，将使用回退模型: {}", e.getMessage());
+            try {
+                this.chatModel = DynamicLlmClientFactory.createFallbackModel();
+                this.usingFallbackModel = true;
+                log.info("成功使用回退模型");
+            } catch (Exception fallbackException) {
+                log.error("初始化回退模型也失败: {}", fallbackException.getMessage());
+                throw new RuntimeException("无法初始化任何 LLM 模型", fallbackException);
+            }
+        }
+    }
+
+
+    private void initializeAgentWithTools() {
+        if (config.isEnableTools() && chatModel != null) {
+            try {
+                this.agentWithTools = AiServices.builder(AgentWithTools.class)
+                        .chatLanguageModel(chatModel)
+                        .chatMemory(chatMemory)
+                        .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool)
+                        .build();
+            } catch (Exception e) {
+                log.warn("初始化带工具的 Agent 失败，将使用简单模式: {}", e.getMessage());
+                this.agentWithTools = null;
+            }
+        } else {
+            this.agentWithTools = null;
+        }
     }
 
     public BaseAgent() {
@@ -294,13 +326,37 @@ public class BaseAgent implements Agent {
             return response;
         } catch (Exception e) {
             log.error("LLM 交互失败", e);
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String errorMsg = "交互失败: " + e.getMessage() + "\n详细信息: " + sw.toString();
+
+            // 如果不是在使用回退模型，尝试切换到默认配置
+            if (!usingFallbackModel) {
+                log.warn("尝试切换到默认配置（Ollama）...");
+                try {
+                    switchToDefaultConfig();
+                    // 重新尝试对话
+                    return retryWithDefaultConfig(message, attachments);
+                } catch (Exception retryException) {
+                    log.error("切换到默认配置也失败", retryException);
+                }
+            }
+
+            // 简化错误信息，避免过长的堆栈跟踪
+            String errorMsg = "交互失败: " + e.getMessage();
+
+            // 如果正在使用回退模型，提供更友好的提示
+            if (usingFallbackModel) {
+                errorMsg = "当前 AI 服务不可用。\n\n" +
+                        "建议：\n" +
+                        "1. 检查 Ollama 是否正在运行 (http://localhost:11434)\n" +
+                        "2. 访问配置页面设置其他可用的 AI 提供商\n" +
+                        "3. 检查网络连接和 API Key（如果需要）\n" +
+                        "\n详细错误: " + e.getMessage();
+            }
+
             if (traceEnabled && currentTrace != null) {
                 currentTrace.addThought("发生错误: " + e.getMessage());
                 currentTrace.markComplete();
             }
+
             return errorMsg;
         }
     }
@@ -714,5 +770,79 @@ public class BaseAgent implements Agent {
      */
     public boolean isTraceEnabled() {
         return traceEnabled;
+    }
+
+    /**
+     * 切换到默认配置（Ollama）
+     */
+    private void switchToDefaultConfig() {
+        try {
+            log.info("正在切换到默认配置（Ollama）...");
+            AgentConfig defaultConfig = AgentConfig.builder()
+                    .fromDefaultProviderConfig()
+                    .build();
+
+            // 更新配置
+            this.config.loadFromDefaultProviderConfig();
+            this.usingFallbackModel = true;
+
+            // 重新初始化 LLM 客户端
+            initializeChatModel();
+            initializeAgentWithTools();
+
+            // 重新生成系统提示词
+            updateSystemPrompt();
+
+            log.info("成功切换到默认配置（Ollama）");
+        } catch (Exception e) {
+            log.error("切换到默认配置失败", e);
+            throw new RuntimeException("无法切换到默认配置", e);
+        }
+    }
+
+    /**
+     * 使用默认配置重新尝试对话
+     */
+    private String retryWithDefaultConfig(String message, java.util.List<java.util.Map<String, Object>> attachments) {
+        log.info("使用默认配置重新尝试对话...");
+
+        // 保存当前用户消息
+        // 注意：这里我们不重复添加用户消息，因为异常发生后 message 已经添加过了
+
+        // 使用当前配置重新执行对话
+        try {
+            dev.langchain4j.data.message.UserMessage userMessage;
+            if (attachments != null && !attachments.isEmpty()) {
+                var contents = new java.util.ArrayList<dev.langchain4j.data.message.Content>();
+                for (var attachment : attachments) {
+                    String type = (String) attachment.get("type");
+                    String mimeType = (String) attachment.get("mimeType");
+                    String data = (String) attachment.get("data");
+
+                    if (type != null && type.startsWith("image/") || mimeType != null && mimeType.startsWith("image/")) {
+                        contents.add(dev.langchain4j.data.message.ImageContent.from(data));
+                    }
+                }
+                contents.add(dev.langchain4j.data.message.TextContent.from(message));
+                userMessage = dev.langchain4j.data.message.UserMessage.from(contents);
+            } else {
+                userMessage = dev.langchain4j.data.message.UserMessage.from(message);
+            }
+
+            // 直接使用 chatModel 生成响应
+            var llmResponse = chatModel.generate(memoryService.getMessages());
+            String response = llmResponse.content().text();
+
+            log.info("使用默认配置收到响应: {}", response);
+            memoryService.addAiMessage(response);
+
+            return "⚠️ 注意：原配置不可用，已自动切换到默认（Ollama）模型。\n\n" + response;
+        } catch (Exception e) {
+            log.error("使用默认配置也失败了", e);
+            return "AI 服务暂时不可用。请检查：\n\n" +
+                    "1. Ollama 是否正在运行 (http://localhost:11434)\n" +
+                    "2. 或者在配置页面设置其他可用的 AI 提供商\n" +
+                    "3. 检查网络连接和 API Key（如果需要）";
+        }
     }
 }

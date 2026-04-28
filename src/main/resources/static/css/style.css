@@ -729,6 +729,42 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* Toast 通知样式 */
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: rgba(59, 130, 246, 0.95);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10000;
+    font-weight: 500;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toast.success {
+    background: rgba(34, 197, 94, 0.95);
+}
+
+.toast.error {
+    background: rgba(239, 68, 68, 0.95);
+}
+
+.toast.warning {
+    background: rgba(245, 158, 11, 0.95);
+}
+
+.toast.active {
+    transform: translateY(0);
+    opacity: 1;
+}
+
 .streaming-cursor {
     display: inline-block;
     width: 10px;

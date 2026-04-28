@@ -15,6 +15,8 @@ public class AgentConfig {
         OPENAI_COMPATIBLE
     }
 
+    // 支持动态配置的字段
+    private String providerConfigId;
     private LlmProvider provider = LlmProvider.OLLAMA;
     private String modelName = "llama2";
     private String baseUrl = "http://localhost:11434";
@@ -146,6 +148,40 @@ public class AgentConfig {
             return this;
         }
 
+        public Builder fromProviderConfig(String providerConfigId) {
+            ProviderConfig providerConfig = ProviderConfigManager.getInstance().getConfig(providerConfigId);
+            if (providerConfig != null) {
+                config.providerConfigId = providerConfigId;
+                config.modelName = providerConfig.getModelName();
+                config.baseUrl = providerConfig.getBaseUrl();
+                config.apiKey = providerConfig.getApiKey();
+                config.temperature = providerConfig.getTemperature();
+                config.maxTokens = providerConfig.getMaxTokens();
+                config.topP = providerConfig.getTopP();
+
+                // 转换 ProviderType 到 LlmProvider
+                switch (providerConfig.getType()) {
+                    case OLLAMA:
+                        config.provider = LlmProvider.OLLAMA;
+                        break;
+                    case OPENAI:
+                        config.provider = LlmProvider.OPENAI;
+                        break;
+                    default:
+                        config.provider = LlmProvider.OPENAI_COMPATIBLE;
+                }
+            }
+            return this;
+        }
+
+        public Builder fromDefaultProviderConfig() {
+            ProviderConfig defaultConfig = ProviderConfigManager.getInstance().getDefaultConfig();
+            if (defaultConfig != null) {
+                fromProviderConfig(defaultConfig.getId());
+            }
+            return this;
+        }
+
         public AgentConfig build() {
             return config;
         }
@@ -261,5 +297,45 @@ public class AgentConfig {
 
     public void setMaxConversationSummaryLength(int maxConversationSummaryLength) {
         this.maxConversationSummaryLength = maxConversationSummaryLength;
+    }
+
+    public String getProviderConfigId() {
+        return providerConfigId;
+    }
+
+    public void setProviderConfigId(String providerConfigId) {
+        this.providerConfigId = providerConfigId;
+    }
+
+    public void loadFromProviderConfig(ProviderConfig providerConfig) {
+        if (providerConfig == null) {
+            return;
+        }
+        this.providerConfigId = providerConfig.getId();
+        this.modelName = providerConfig.getModelName();
+        this.baseUrl = providerConfig.getBaseUrl();
+        this.apiKey = providerConfig.getApiKey();
+        this.temperature = providerConfig.getTemperature();
+        this.maxTokens = providerConfig.getMaxTokens();
+        this.topP = providerConfig.getTopP();
+
+        // 转换 ProviderType 到 LlmProvider
+        switch (providerConfig.getType()) {
+            case OLLAMA:
+                this.provider = LlmProvider.OLLAMA;
+                break;
+            case OPENAI:
+                this.provider = LlmProvider.OPENAI;
+                break;
+            default:
+                this.provider = LlmProvider.OPENAI_COMPATIBLE;
+        }
+    }
+
+    public void loadFromDefaultProviderConfig() {
+        ProviderConfig defaultConfig = ProviderConfigManager.getInstance().getDefaultConfig();
+        if (defaultConfig != null) {
+            loadFromProviderConfig(defaultConfig);
+        }
     }
 }

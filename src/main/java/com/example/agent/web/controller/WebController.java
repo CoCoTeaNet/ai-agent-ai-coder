@@ -33,4 +33,12 @@ public class WebController {
     public String config() {
         return "config";
     }
+
+    /**
+     * 提供商配置页面
+     */
+    @GetMapping("/provider-config")
+    public String providerConfig() {
+        return "provider-config";
+    }
 }

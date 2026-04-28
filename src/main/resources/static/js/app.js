@@ -226,10 +226,90 @@ class AgentApp {
         }
     }
 
-    // 加载并渲染模型切换器
+    // 加载并渲染模型和提供商切换器
     async loadModels() {
         const toggleGroup = document.getElementById('modelToggleGroup');
         if (!toggleGroup) return;
+
+        try {
+            // 首先尝试加载提供商列表
+            const providersResponse = await fetch('/api/providers');
+            const providersData = await providersResponse.json();
+
+            if (providersData.success && providersData.data && providersData.data.length > 0) {
+                toggleGroup.innerHTML = '';
+                let firstEnabledProvider = null;
+
+                providersData.data.forEach(provider => {
+                    const btn = document.createElement('button');
+                    btn.className = 'model-toggle-btn';
+                    btn.dataset.providerId = provider.id;
+
+                    const dot = document.createElement('span');
+                    dot.className = 'model-status-dot';
+
+                    const text = document.createElement('span');
+                    text.textContent = provider.name;
+
+                    btn.appendChild(dot);
+                    btn.appendChild(text);
+
+                    if (!provider.enabled) {
+                        btn.classList.add('disabled');
+                        btn.title = '该提供商已禁用';
+                    } else if (!firstEnabledProvider) {
+                        firstEnabledProvider = provider;
+                    }
+
+                    if (provider.isDefault) {
+                        btn.classList.add('default-provider');
+                    }
+
+                    // 点击切换提供商
+                    btn.addEventListener('click', async () => {
+                        if (btn.classList.contains('disabled') || btn.classList.contains('active')) return;
+
+                        // 乐观更新UI
+                        const currentActive = toggleGroup.querySelector('.active');
+                        if (currentActive) currentActive.classList.remove('active');
+                        btn.classList.add('active');
+
+                        try {
+                            const switchResponse = await fetch(`/api/v1/session/${this.sessionId}/provider`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ providerConfigId: provider.id })
+                            });
+
+                            const switchData = await switchResponse.json();
+                            if (!switchData.success) {
+                                this.showToast(switchData.error || '切换提供商失败', 'error');
+                                btn.classList.remove('active');
+                                if (currentActive) currentActive.classList.add('active');
+                            } else {
+                                this.showToast(`已切换至: ${provider.name}`, 'success');
+                            }
+                        } catch (error) {
+                            this.showToast('切换提供商失败', 'error');
+                            btn.classList.remove('active');
+                            if (currentActive) currentActive.classList.add('active');
+                        }
+                    });
+
+                    toggleGroup.appendChild(btn);
+                });
+
+                if (firstEnabledProvider) {
+                    const defaultBtn = toggleGroup.querySelector(`[data-provider-id="${firstEnabledProvider.id}"]`);
+                    if (defaultBtn) {
+                        defaultBtn.classList.add('active');
+                    }
+                }
+                return;
+            }
+        } catch (error) {
+            console.log('加载提供商列表失败，回退到原模型列表:', error);
+        }
 
         try {
             const response = await fetch('/api/v1/models');
@@ -260,11 +340,9 @@ class AgentApp {
                         firstAvailableModel = model;
                     }
 
-                    // 点击切换模型
                     btn.addEventListener('click', async () => {
                         if (btn.classList.contains('disabled') || btn.classList.contains('active')) return;
 
-                        // 乐观更新UI
                         const currentActive = toggleGroup.querySelector('.active');
                         if (currentActive) currentActive.classList.remove('active');
                         btn.classList.add('active');
@@ -279,7 +357,6 @@ class AgentApp {
                             const switchData = await switchResponse.json();
                             if (!switchData.success) {
                                 this.showToast(switchData.error || '当前模型不可用', 'error');
-                                // 恢复原状
                                 btn.classList.remove('active');
                                 if (currentActive) currentActive.classList.add('active');
                             } else {
@@ -296,7 +373,6 @@ class AgentApp {
                     toggleGroup.appendChild(btn);
                 });
 
-                // 默认选中第一个可用模型
                 if (firstAvailableModel) {
                     this.currentModelId = firstAvailableModel.id;
                     const defaultBtn = toggleGroup.querySelector(`[data-value="${firstAvailableModel.id}"]`);
@@ -772,6 +848,20 @@ class AgentApp {
     showError(error) {
         this.addMessageToChat('错误：' + error, 'assistant');
         console.error(error);
+    }
+
+    // 显示 Toast 通知
+    showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        if (toast) {
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('active');
+
+            setTimeout(() => {
+                toast.classList.remove('active');
+            }, 3000);
+        }
     }
 
     // 格式化时间戳
