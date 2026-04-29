@@ -13,6 +13,7 @@ import com.example.agent.tools.NetworkTool;
 import com.example.agent.tools.RealSearchTool;
 import com.example.agent.tools.ExcelTool;
 import com.example.agent.tools.DataSpiderTool;
+import com.example.agent.tools.StableDiffusionTool;
 import com.example.agent.skills.SkillManager;
 import com.example.agent.skills.Skill;
 import dev.langchain4j.data.message.*;
@@ -50,6 +51,7 @@ public class BaseAgent implements Agent {
     private final NetworkTool networkTool;
     private final ExcelTool excelTool;
     private final DataSpiderTool dataSpiderTool;
+    private final StableDiffusionTool stableDiffusionTool;
     private final SkillManager skillManager;
     private boolean initialized;
     private String conversationSummary;
@@ -77,6 +79,7 @@ public class BaseAgent implements Agent {
         this.networkTool = new NetworkTool();
         this.excelTool = new ExcelTool();
         this.dataSpiderTool = new DataSpiderTool();
+        this.stableDiffusionTool = new StableDiffusionTool();
         this.skillManager = new SkillManager();
         this.conversationSummary = "";
         this.totalMessagesProcessed = 0;
@@ -118,7 +121,7 @@ public class BaseAgent implements Agent {
                 this.agentWithTools = AiServices.builder(AgentWithTools.class)
                         .chatLanguageModel(chatModel)
                         .chatMemory(chatMemory)
-                        .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool)
+                        .tools(dateTimeTool, calculatorTool, realSearchTool, fileTool, networkTool, excelTool, dataSpiderTool, stableDiffusionTool)
                         .build();
             } catch (Exception e) {
                 log.warn("初始化带工具的 Agent 失败，将使用简单模式: {}", e.getMessage());
@@ -623,6 +626,7 @@ public class BaseAgent implements Agent {
             tools.add("RealSearchTool - 真实网络搜索（DuckDuckGo/维基百科）");
             tools.add("FileTool - 文件操作");
             tools.add("NetworkTool - 网络请求");
+            tools.add("StableDiffusion - 文生图，根据文本描述生成图像");
 
             if (config.isEnableChainOfThought()) {
                 tools.add("Chain of Thought - 思维链推理");

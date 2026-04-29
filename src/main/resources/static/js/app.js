@@ -89,6 +89,49 @@ class AgentApp {
             console.error('工具按钮元素未找到');
         }
 
+        // 文生图按钮
+        const imageGenBtn = document.getElementById('imageGenBtn');
+        if (imageGenBtn) {
+            imageGenBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showImageGenModal();
+            }, true);
+            console.log('文生图按钮事件监听器绑定成功');
+        }
+
+        // 文生图模态框关闭
+        const imageGenModalClose = document.getElementById('imageGenModalClose');
+        if (imageGenModalClose) {
+            imageGenModalClose.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.hideImageGenModal();
+            }, true);
+        }
+
+        // 生成图像按钮
+        const generateImageBtn = document.getElementById('generateImageBtn');
+        if (generateImageBtn) {
+            generateImageBtn.addEventListener('click', () => {
+                this.generateImage();
+            });
+        }
+
+        // 下载图像按钮
+        const downloadImageBtn = document.getElementById('downloadImageBtn');
+        if (downloadImageBtn) {
+            downloadImageBtn.addEventListener('click', () => {
+                this.downloadImage();
+            });
+        }
+
+        // 重新生成按钮
+        const regenerateImageBtn = document.getElementById('regenerateImageBtn');
+        if (regenerateImageBtn) {
+            regenerateImageBtn.addEventListener('click', () => {
+                this.generateImage();
+            });
+        }
+
         // 执行链路开关 - 使用捕获阶段
         if (this.traceToggle) {
             this.traceToggle.addEventListener('click', (e) => {
@@ -829,6 +872,7 @@ class AgentApp {
             'RealSearchTool - 真实网络搜索（DuckDuckGo/维基百科）': '使用真实API搜索网络信息',
             'FileTool - 文件操作': '文件读写、目录操作等',
             'NetworkTool - 网络请求': '发送HTTP请求获取网络资源',
+            'StableDiffusion - 文生图，根据文本描述生成图像': '使用自然语言描述生成图像，支持自定义参数',
             'Chain of Thought - 思维链推理': '展示思考过程，逐步推理得出结论',
             'ReAct - 推理-行动模式': '先思考后行动，使用工具解决问题',
             'Self Reflection - 自我反思': '自动检查和改进回答质量',
@@ -1308,7 +1352,7 @@ class AgentApp {
             modal.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
             modal.style.opacity = '0';
             modal.style.transition = 'opacity 0.3s ease';
-            
+
             const img = document.createElement('img');
             img.id = 'imageModalImg';
             img.style.maxWidth = '90%';
@@ -1317,7 +1361,7 @@ class AgentApp {
             img.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
             img.style.transform = 'scale(0.9)';
             img.style.transition = 'transform 0.3s ease';
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.innerHTML = '×';
             closeBtn.style.position = 'absolute';
@@ -1328,10 +1372,10 @@ class AgentApp {
             closeBtn.style.color = 'white';
             closeBtn.style.fontSize = '3rem';
             closeBtn.style.cursor = 'pointer';
-            
+
             modal.appendChild(img);
             modal.appendChild(closeBtn);
-            
+
             // 点击关闭
             const closeModal = () => {
                 modal.style.opacity = '0';
@@ -1344,19 +1388,115 @@ class AgentApp {
                     closeModal();
                 }
             };
-            
+
             document.body.appendChild(modal);
         }
-        
+
         const modalImg = document.getElementById('imageModalImg');
         modalImg.src = imgUrl;
-        
+
         modal.style.display = 'flex';
         // 稍微延迟以触发动画
         setTimeout(() => {
             modal.style.opacity = '1';
             modalImg.style.transform = 'scale(1)';
         }, 10);
+    }
+
+    // 显示文生图模态框
+    showImageGenModal() {
+        const modal = document.getElementById('imageGenModal');
+        if (modal) {
+            modal.classList.add('show');
+        }
+    }
+
+    // 隐藏文生图模态框
+    hideImageGenModal() {
+        const modal = document.getElementById('imageGenModal');
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    // 生成图像
+    async generateImage() {
+        const prompt = document.getElementById('imagePrompt').value.trim();
+        const negativePrompt = document.getElementById('imageNegativePrompt').value.trim();
+        const width = parseInt(document.getElementById('imageWidth').value);
+        const height = parseInt(document.getElementById('imageHeight').value);
+        const steps = parseInt(document.getElementById('imageSteps').value);
+        const cfgScale = parseFloat(document.getElementById('imageCfgScale').value);
+
+        if (!prompt) {
+            this.showToast('请输入图像描述', 'error');
+            return;
+        }
+
+        // 显示加载状态
+        document.getElementById('imageGenLoading').style.display = 'block';
+        document.getElementById('imageGenResult').style.display = 'none';
+        document.getElementById('generateImageBtn').disabled = true;
+
+        try {
+            const response = await fetch('/api/v1/text-to-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    negativePrompt: negativePrompt,
+                    width: width,
+                    height: height,
+                    steps: steps,
+                    cfgScale: cfgScale,
+                    batchSize: 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // 显示生成的图像
+                const generatedImage = document.getElementById('generatedImage');
+                generatedImage.src = result.image;
+                document.getElementById('imageGenResult').style.display = 'block';
+                this.showToast('图像生成成功!', 'success');
+            } else {
+                this.showToast('图像生成失败: ' + (result.error || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('图像生成出错:', error);
+            this.showToast('网络错误: ' + error.message, 'error');
+        } finally {
+            document.getElementById('imageGenLoading').style.display = 'none';
+            document.getElementById('generateImageBtn').disabled = false;
+        }
+    }
+
+    // 下载图像
+    downloadImage() {
+        const generatedImage = document.getElementById('generatedImage');
+        if (!generatedImage || !generatedImage.src) {
+            this.showToast('没有可下载的图像', 'error');
+            return;
+        }
+
+        try {
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = generatedImage.src;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            link.download = `generated-image-${timestamp}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            this.showToast('图像下载开始', 'success');
+        } catch (error) {
+            console.error('下载失败:', error);
+            this.showToast('下载失败: ' + error.message, 'error');
+        }
     }
 }
 

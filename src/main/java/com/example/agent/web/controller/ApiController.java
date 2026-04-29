@@ -5,6 +5,7 @@ import com.example.agent.services.ExecutionTrace;
 import com.example.agent.tools.FileTool;
 import com.example.agent.tools.NetworkTool;
 import com.example.agent.tools.SearchTool;
+import com.example.agent.tools.StableDiffusionTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -858,6 +859,157 @@ public class ApiController {
 
         public void setContentType(String contentType) {
             this.contentType = contentType;
+        }
+    }
+
+    /**
+     * 文生图请求
+     */
+    public static class TextToImageRequest {
+        private String prompt;
+        private String negativePrompt;
+        private int width;
+        private int height;
+        private int steps;
+        private double cfgScale;
+        private int batchSize;
+
+        public TextToImageRequest() {
+            this.width = 512;
+            this.height = 512;
+            this.steps = 20;
+            this.cfgScale = 7.5;
+            this.batchSize = 1;
+        }
+
+        public String getPrompt() {
+            return prompt;
+        }
+
+        public void setPrompt(String prompt) {
+            this.prompt = prompt;
+        }
+
+        public String getNegativePrompt() {
+            return negativePrompt;
+        }
+
+        public void setNegativePrompt(String negativePrompt) {
+            this.negativePrompt = negativePrompt;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public void setWidth(int width) {
+            this.width = width;
+        }
+
+        public int getHeight() {
+            return height;
+        }
+
+        public void setHeight(int height) {
+            this.height = height;
+        }
+
+        public int getSteps() {
+            return steps;
+        }
+
+        public void setSteps(int steps) {
+            this.steps = steps;
+        }
+
+        public double getCfgScale() {
+            return cfgScale;
+        }
+
+        public void setCfgScale(double cfgScale) {
+            this.cfgScale = cfgScale;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
+        }
+    }
+
+    /**
+     * 文生图API
+     */
+    @PostMapping("/text-to-image")
+    public ResponseEntity<Map<String, Object>> textToImage(@RequestBody TextToImageRequest request) {
+        try {
+            String prompt = request.getPrompt();
+
+            if (prompt == null || prompt.trim().isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "图像描述不能为空");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            StableDiffusionTool stableDiffusionTool = new StableDiffusionTool();
+            String imageBase64 = stableDiffusionTool.generateImage(
+                    prompt,
+                    request.getNegativePrompt(),
+                    request.getWidth(),
+                    request.getHeight(),
+                    request.getSteps(),
+                    request.getCfgScale(),
+                    request.getBatchSize()
+            );
+
+            if (imageBase64.startsWith("data:image")) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", true);
+                response.put("image", imageBase64);
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", imageBase64);
+                return ResponseEntity.badRequest().body(response);
+            }
+
+        } catch (Exception e) {
+            log.error("文生图失败", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "图像生成失败: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    /**
+     * 检查稳定扩散API连接
+     */
+    @GetMapping("/text-to-image/check-connection")
+    public ResponseEntity<Map<String, Object>> checkConnection() {
+        try {
+            StableDiffusionTool stableDiffusionTool = new StableDiffusionTool();
+            String result = stableDiffusionTool.checkApiConnection();
+
+            Map<String, Object> response = new HashMap<>();
+            if (result.equals("API连接正常")) {
+                response.put("success", true);
+                response.put("message", result);
+            } else {
+                response.put("success", false);
+                response.put("error", result);
+            }
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("API连接检查失败", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "检查API连接失败: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
     }
 }

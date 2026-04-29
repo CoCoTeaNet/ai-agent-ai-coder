@@ -60,10 +60,17 @@ for %%i in (java.exe) do set "JAVACMD=%%~$PATH:i"
 goto checkJCmd
 
 :OkJHome
-if exist "%JAVA_HOME%\bin\java.exe" goto foundJavaFromJavaHome
+if exist "%JAVA_HOME%\bin\java.exe" (
+    set "JAVACMD=%JAVA_HOME%\bin\java.exe"
+    goto checkJCmd
+)
 
-set "JAVACMD=%JAVA_HOME%\bin\java.exe"
-goto checkJCmd
+echo.
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+goto error
 
 :checkJCmd
 if exist "%JAVACMD%" goto chkMHome
